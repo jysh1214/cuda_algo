@@ -4,14 +4,25 @@ my cuda programing practice
 
 ## TODO
 
-### find max
-    - [x] cpu
-    - [x] global memory
-    - [x] shared memory
+### find max element
+- [x] cpu
+- [x] global memory
+- [x] shared memory
+
+### reduction
+- [x] cpu
+- [x] global memory
+- [ ] shared memory
+- [ ] warp level
 
 ### histogram
-    - [x] cpu
-    - [x] global memory
-    - [ ] shared memory
+- [x] cpu
+- [x] global memory
+- [ ] shared memory
+- [ ] warp level
 
 ### sort
+
+### bfs
+
+### kmeans

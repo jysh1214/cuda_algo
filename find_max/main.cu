@@ -5,7 +5,7 @@
 #include <cuda.h>
 
 #define u32 unsigned int
-#define BLOCK_SIZE 32
+#define BLOCK_SIZE 64
 
 #define CREATE_RAND_ARR(arr, size, min, max) \
 do {                                         \
@@ -16,10 +16,10 @@ do {                                         \
 } while (0)                                  \
 
 template <typename T>
-T cpu_find_max(T* arr, const u32 arr_size);
+T cpuFindMax(T* arr, const u32 arr_size);
 
 template <typename T>
-T gpu_find_max(T* arr, const u32 arr_size);
+T gpuFindMax(T* arr, const u32 arr_size);
 
 __device__
 float atomicFloatMax(float* address, const float val)
@@ -86,7 +86,7 @@ void find_max_float_kernel(const float* __restrict__ arr, const u32 arr_size, fl
 }
 
 template <>
-int gpu_find_max<int>(int* h_arr, const u32 arr_size)
+int gpuFindMax<int>(int* h_arr, const u32 arr_size)
 {
     assert(arr_size > 0);
 
@@ -116,7 +116,7 @@ int gpu_find_max<int>(int* h_arr, const u32 arr_size)
 }
 
 template <>
-float gpu_find_max<float>(float* h_arr, const u32 arr_size)
+float gpuFindMax<float>(float* h_arr, const u32 arr_size)
 {
     assert(arr_size > 0);
 
@@ -146,7 +146,7 @@ float gpu_find_max<float>(float* h_arr, const u32 arr_size)
 }
 
 template <>
-int cpu_find_max<int>(int* arr, const u32 arr_size)
+int cpuFindMax<int>(int* arr, const u32 arr_size)
 {
     assert(arr_size > 0);
     int maxval = arr[0];
@@ -158,7 +158,7 @@ int cpu_find_max<int>(int* arr, const u32 arr_size)
 }
 
 template <>
-float cpu_find_max<float>(float* arr, const u32 arr_size)
+float cpuFindMax<float>(float* arr, const u32 arr_size)
 {
     assert(arr_size > 0);
     float maxval = arr[0];
@@ -173,26 +173,25 @@ int main()
 {
     const u32 arr_size = 1000;
 
-    // int arr
     int* int_arr = (int*)malloc(arr_size * sizeof(int));
     CREATE_RAND_ARR(int_arr, arr_size, 0, 1000);
-    // float arr
+
     float* float_arr = (float*)malloc(arr_size * sizeof(float));
     CREATE_RAND_ARR(float_arr, arr_size, 0, 1000);
     for (u32 i = 0; i < arr_size; i++) {
         float_arr[i] /= 10.0;
     }
 
-    int cpu_int_maxval = cpu_find_max<int>(int_arr, arr_size);
+    int cpu_int_maxval = cpuFindMax<int>(int_arr, arr_size);
     printf("CPU find max int element: %d\n", cpu_int_maxval);
 
-    int gpu_int_maxval = gpu_find_max<int>(int_arr, arr_size);
+    int gpu_int_maxval = gpuFindMax<int>(int_arr, arr_size);
     printf("GPU find max int element: %d\n", gpu_int_maxval);
 
-    float cpu_float_maxval = cpu_find_max<float>(float_arr, arr_size);
+    float cpu_float_maxval = cpuFindMax<float>(float_arr, arr_size);
     printf("CPU find max float element: %f\n", cpu_float_maxval);
 
-    float gpu_float_maxval = gpu_find_max<float>(float_arr, arr_size);
+    float gpu_float_maxval = gpuFindMax<float>(float_arr, arr_size);
     printf("GPU find max float element: %f\n", gpu_float_maxval);    
     
     free(int_arr);
