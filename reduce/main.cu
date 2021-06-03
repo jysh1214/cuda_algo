@@ -55,30 +55,47 @@ u32 getNextPowOf2(const u32 num)
     return new_num;
 }
 
-/**
- * @brief large shared memory
- */
 __global__ 
-void shared_reduce_sum_kernel(const u32* arr, const u32 size, u32* sum)
+void shared_reduce_sum_kernel(const u32* arr, const u32 size, u32* goal)
+{
+    extern __shared__ u32 shared_arr[];
+    u32 id_x = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (threadIdx.x < size) {
+        shared_arr[threadIdx.x] = arr[id_x];
+        __syncthreads();
+        for (u32 offset = blockDim.x >> 1; offset > 0; offset >>= 1) {
+            if (threadIdx.x < offset) {
+                shared_arr[threadIdx.x] += shared_arr[threadIdx.x + offset];
+            }
+            __syncthreads();
+        }
+        if (threadIdx.x == 0) {
+            goal[blockIdx.x] = shared_arr[threadIdx.x];
+        }
+    }
+}
+
+__global__ 
+void large_shared_reduce_sum_kernel(const u32* arr, const u32 size, u32* sum)
 {
     extern __shared__ u32 shared_arr[];
     u32 id_x = blockIdx.x * blockDim.x + threadIdx.x;
 
     if (id_x < size) {
-        // shared_arr[blockIdx.x] = arr[id_x];
+        if (id_x == 0) {
+            *sum = 0;
+        }
         shared_arr[id_x] = arr[id_x];
         __syncthreads();
         for (u32 offset = blockDim.x >> 1; offset > 0; offset >>= 1) {
             if (threadIdx.x < offset) {
-                // shared_arr[threadIdx.x] += shared_arr[threadIdx.x + offset];
                 shared_arr[id_x] += shared_arr[id_x + offset];
             }
             __syncthreads();
         }
         if (threadIdx.x == 0) {
-            // atomicAdd(sum, shared_arr[threadIdx.x]);
             atomicAdd(sum, shared_arr[id_x]);
-            // *sum = 0;
         }
     }
 }
@@ -100,6 +117,10 @@ void global_reduce_sum_kernel(u32* arr, const u32 size, u32* sum)
     *sum = arr[0];
 }
 
+/**
+ * use shared memory the size as block size
+ * merge twice
+ */
 __host__
 u32 gpuSharedReduceSum(const u32* const h_arr, const u32 size)
 {
@@ -121,21 +142,68 @@ u32 gpuSharedReduceSum(const u32* const h_arr, const u32 size)
 
     dim3 blocks = BLOCK_SIZE;
     dim3 grids = (impl_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
-    // u32 shared_mem_size = BLOCK_SIZE * sizeof(u32);
-    u32 shared_mem_size = impl_size * sizeof(u32);
-    shared_reduce_sum_kernel <<< grids, blocks, shared_mem_size >>> (d_arr, impl_size, d_sum);
+
+    u32* d_temp;
+    cudaMalloc((void**)&d_temp, grids.x/*num of blocks*/ * sizeof(u32));
+
+    u32 shared_mem_size = BLOCK_SIZE * sizeof(u32);
+    shared_reduce_sum_kernel <<< grids, blocks, shared_mem_size >>> (d_arr, impl_size, d_temp);
+    // because impl_size and BLOCK_SIZE both are power of 2,
+    // (impl_size / BLOCK_SIZE) is also power of 2
+    shared_reduce_sum_kernel <<< 1, grids.x, grids.x * sizeof(u32) >>> (d_temp, grids.x, d_sum);
     if (cudaSuccess != cudaGetLastError()) {
-        printf("find_max_float_kernel fault!\n");
+        printf("shared_reduce_sum_kernel fault!\n");
     }
 
     cudaMemcpy(h_sum, d_sum, 1 * sizeof(u32), cudaMemcpyDeviceToHost);
 
+    u32 sum = h_sum[0];
+    free(h_sum);
     free(temp);
     cudaFree(d_arr);
     cudaFree(d_sum);
 
+    return sum;
+}
+
+/**
+ * use shared memory the size as the array
+ * just do it once
+ */
+__host__
+u32 gpuLargeSharedReduceSum(const u32* const h_arr, const u32 size)
+{
+    assert(size > 0);
+
+    u32 impl_size = getNextPowOf2(size);
+    u32* temp = (u32*)malloc(impl_size * sizeof(u32));
+    COPY_ARR(temp, h_arr, size);
+    ZERO_PADDING(temp, size, impl_size);
+    
+    u32* d_arr;
+    cudaMalloc((void**)&d_arr, impl_size * sizeof(u32));
+    cudaMemcpy(d_arr, temp, impl_size * sizeof(u32), cudaMemcpyHostToDevice);
+
+    u32* d_sum;
+    cudaMalloc((void**)&d_sum, 1 * sizeof(u32));
+
+    u32* h_sum = (u32*)malloc(1 * sizeof(u32));
+
+    dim3 blocks = BLOCK_SIZE;
+    dim3 grids = (impl_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    u32 shared_mem_size = impl_size * sizeof(u32);
+    large_shared_reduce_sum_kernel <<< grids, blocks, shared_mem_size >>> (d_arr, impl_size, d_sum);
+    if (cudaSuccess != cudaGetLastError()) {
+        printf("large_shared_reduce_sum_kernel fault!\n");
+    }
+
+    cudaMemcpy(h_sum, d_sum, 1 * sizeof(u32), cudaMemcpyDeviceToHost);
+
     u32 sum = *h_sum;
     free(h_sum);
+    free(temp);
+    cudaFree(d_arr);
+    cudaFree(d_sum);
 
     return sum;
 }
@@ -167,12 +235,11 @@ u32 gpuGlobalReduceSum(const u32* const h_arr, const u32 size)
 
     cudaMemcpy(h_sum, d_sum, 1 * sizeof(u32), cudaMemcpyDeviceToHost);
 
+    u32 sum = *h_sum;
     free(temp);
+    free(h_sum);
     cudaFree(d_arr);
     cudaFree(d_sum);
-
-    u32 sum = *h_sum;
-    free(h_sum);
 
     return sum;
 }
@@ -209,7 +276,7 @@ u32 cpuReduceSum(const u32* const arr, const u32 size)
 
 int main()
 {
-    const u32 arr_size = 1000;
+    const u32 arr_size = 1000; /* must > BLOCK_SIZE*/
 
     u32* arr = (u32*)malloc(arr_size * sizeof(u32));
     CREATE_RAND_ARR(arr, arr_size, 0, 10);
@@ -221,10 +288,13 @@ int main()
     printf("CPU reduce sum: %d\n", cpuReduceSumval);
 
     u32 gpuGlobalReduceSumVal = gpuGlobalReduceSum(arr, arr_size);
-    printf("GPU global reduce sum: %d\n", gpuGlobalReduceSumVal);
+    printf("GPU global memory reduce sum: %d\n", gpuGlobalReduceSumVal);
 
     u32 gpuSharedReduceSumVal = gpuSharedReduceSum(arr, arr_size);
-    printf("GPU shared reduce sum: %d\n", gpuSharedReduceSumVal);
+    printf("GPU shared memory reduce sum: %d\n", gpuSharedReduceSumVal);
+
+    u32 gpuLargeSharedReduceSumVal = gpuLargeSharedReduceSum(arr, arr_size);
+    printf("GPU large shared memory reduce sum: %d\n", gpuLargeSharedReduceSumVal);
 
     free(arr);
     return 0;
