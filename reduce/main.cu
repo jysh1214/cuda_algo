@@ -8,6 +8,7 @@
 #define u64 unsigned long
 #define uchar unsigned char
 #define BLOCK_SIZE 64
+#define FULL_MASK 0xffffffff
 
 #define CREATE_RAND_ARR(arr, size, min, max) \
 do {                                         \
@@ -115,6 +116,48 @@ void global_reduce_sum_kernel(u32* arr, const u32 size, u32* sum)
     }
 
     *sum = arr[0];
+}
+
+__global__
+void warp_reduce_sum_kernel(u32* arr, u32* sum)
+{
+    u32 val = arr[threadIdx.x];
+    for (u32 offset = warpSize >> 1; offset > 0; offset >>= 1) {
+        val += __shfl_down_sync(FULL_MASK, val, offset);
+        arr[threadIdx.x] = val;
+        __syncwarp();
+    }
+    if (threadIdx.x == 0) {
+        *sum = arr[threadIdx.x];
+    }
+}
+
+__host__
+u32 gpuWarpLevelReduce(const u32* const h_arr, const u32 size)
+{
+    assert(size == 32 /*warp size*/);
+
+    u32* d_arr;
+    cudaMalloc((void**)&d_arr, size * sizeof(u32));
+    cudaMemcpy(d_arr, h_arr, size * sizeof(u32), cudaMemcpyHostToDevice);
+
+    u32* d_sum;
+    cudaMalloc((void**)&d_sum, 1 * sizeof(u32));
+
+    warp_reduce_sum_kernel <<< 1, 32 >>> (d_arr, d_sum);
+    if (cudaSuccess != cudaGetLastError()) {
+        printf("shared_reduce_sum_kernel fault!\n");
+    }
+    
+    u32* h_sum = (u32*)malloc(1 * sizeof(u32));
+    cudaMemcpy(h_sum, d_sum, 1 * sizeof(u32), cudaMemcpyDeviceToHost);
+    u32 sum = *h_sum;
+
+    cudaFree(d_arr);
+    cudaFree(d_sum);
+    free(h_sum);
+
+    return sum;
 }
 
 /**
@@ -281,11 +324,11 @@ int main()
     u32* arr = (u32*)malloc(arr_size * sizeof(u32));
     CREATE_RAND_ARR(arr, arr_size, 0, 10);
 
-    u32 cpuSumval = cpuSum(arr, arr_size);
-    printf("CPU add sum: %d\n", cpuSumval);
+    u32 cpuSumVal = cpuSum(arr, arr_size);
+    printf("CPU add sum: %d\n", cpuSumVal);
 
-    u32 cpuReduceSumval = cpuReduceSum(arr, arr_size);
-    printf("CPU reduce sum: %d\n", cpuReduceSumval);
+    u32 cpuReduceSumVal = cpuReduceSum(arr, arr_size);
+    printf("CPU reduce sum: %d\n", cpuReduceSumVal);
 
     u32 gpuGlobalReduceSumVal = gpuGlobalReduceSum(arr, arr_size);
     printf("GPU global memory reduce sum: %d\n", gpuGlobalReduceSumVal);
@@ -296,6 +339,16 @@ int main()
     u32 gpuLargeSharedReduceSumVal = gpuLargeSharedReduceSum(arr, arr_size);
     printf("GPU large shared memory reduce sum: %d\n", gpuLargeSharedReduceSumVal);
 
+    const u32 warp_level_size = 32; /* as same as warp size 32 */
+
+    u32* warp_arr = (u32*)malloc(warp_level_size * sizeof(u32));
+    CREATE_RAND_ARR(warp_arr, warp_level_size, 0, 10);
+
+    u32 gpuWarpLevelReduceSumVal = gpuWarpLevelReduce(warp_arr, warp_level_size);
+    printf("GPU warp level reduce sum: %d\n", gpuWarpLevelReduceSumVal);
+
     free(arr);
+    free(warp_arr);
+
     return 0;
 }

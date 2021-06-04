@@ -51,12 +51,14 @@ void find_max_int_kernel(const int* __restrict__ arr, const u32 arr_size, int* m
         shared_maxval = arr[0];
     }
     __syncthreads();
-    int local_maxval = shared_maxval;
-    for (u32 i = threadIdx.x; i < arr_size; i += blockDim.x) {
-        local_maxval = (local_maxval > arr[i])? local_maxval : arr[i];
+    int register_maxval = shared_maxval;
+    if (blockIdx.x == 0) {
+        for (u32 i = threadIdx.x; i < arr_size; i += blockDim.x) {
+            register_maxval = (register_maxval > arr[i])? register_maxval : arr[i];
+        }
     }
 
-    atomicMax(&shared_maxval, local_maxval);
+    atomicMax(&shared_maxval, register_maxval);
     __syncthreads();
 
     if (id_x == 0) {
@@ -68,22 +70,59 @@ __global__
 void find_max_float_kernel(const float* __restrict__ arr, const u32 arr_size, float* maxval)
 {
     __shared__ float shared_maxval;
-    if (threadIdx.x == 0) {
+    u32 id_x = blockIdx.x * blockDim.x + threadIdx.x;
+    if (id_x == 0) {
         shared_maxval = arr[0];
     }
     __syncthreads();
-    float local_maxval = shared_maxval;
-    for (u32 i = threadIdx.x; i < arr_size; i += blockDim.x) {
-        local_maxval = (local_maxval > arr[i])? local_maxval : arr[i];
+    float register_maxval = shared_maxval;
+    if (blockIdx.x == 0) {
+        for (u32 i = threadIdx.x; i < arr_size; i += blockDim.x) {
+            register_maxval = (register_maxval > arr[i])? register_maxval : arr[i];
+        }
     }
 
-    atomicFloatMax(&shared_maxval, local_maxval);
+    atomicFloatMax(&shared_maxval, register_maxval);
     __syncthreads();
 
-    if (threadIdx.x == 0) {
+    if (id_x == 0) {
         *maxval = shared_maxval;
     }
 }
+
+// __device__
+// void warp_find_max_kernel(const int* __restrict__ arr, const u32 size, int* max)
+// {
+    
+// }
+
+// __host__
+// int gpuWarpFindMax(int* h_arr, const u32 size)
+// {
+//     assert(size == 32);
+
+//     int* d_arr;
+//     cudaMalloc((void**)&d_arr, size * sizeof(int));
+//     cudaMemcpy(d_arr, h_arr, size * sizeof(int), cudaMemcpyHostToDevice);
+
+//     int* d_max;
+//     cudaMalloc((void**)&d_max, 1 * sizeof(int));
+
+//     warp_find_max_kernel(d_arr, d_max);
+//     if (cudaSuccess != cudaGetLastError()) {
+//         printf("warp_find_max_kernel fault!\n");
+//     }
+
+//     int* h_max = (int*)malloc(1 * sizeof(int));
+//     cudaMemcpy(h_max, d_max, 1 * sizeof(int), cudaMemcpyDeviceToHost);
+//     int max = *h_max;
+
+//     cudaFree(d_arr);
+//     cudaFree(d_max);
+//     free(h_max);
+
+//     return max;
+// }
 
 template <>
 int gpuFindMax<int>(int* h_arr, const u32 arr_size)
@@ -192,10 +231,18 @@ int main()
     printf("CPU find max float element: %f\n", cpu_float_maxval);
 
     float gpu_float_maxval = gpuFindMax<float>(float_arr, arr_size);
-    printf("GPU find max float element: %f\n", gpu_float_maxval);    
+    printf("GPU find max float element: %f\n", gpu_float_maxval);
+
+    const u32 warp_size = 32;
+    int* warp_arr = (int*)malloc(warp_size * sizeof(int));
+    CREATE_RAND_ARR(warp_arr, warp_size, 0, 1000);
+
+    // int gpu_warp_int_maxval = gpuWarpFindMax(warp_arr, warp_size);
+    // printf("GPU warp find max int element: %d\n", gpu_warp_int_maxval);
     
     free(int_arr);
     free(float_arr);
+    free(warp_arr);
 
     return 0;
 }

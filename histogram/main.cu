@@ -55,10 +55,10 @@ uchar atomicUChatAdd(uchar* address, const uchar val)
 }
 
 __global__
-void global_clac_hist_kernel(const uchar* __restrict__ arr, 
-                             const u32 arr_size, 
-                             uchar* hist, 
-                             const u32 hist_bins)
+void global_hist_kernel(const uchar* __restrict__ arr, 
+                        const u32 arr_size, 
+                        uchar* hist, 
+                        const u32 hist_bins)
 {
     u32 id_x = blockIdx.x * blockDim.x + threadIdx.x;
     if (id_x < arr_size) {
@@ -69,10 +69,10 @@ void global_clac_hist_kernel(const uchar* __restrict__ arr,
 }
 
 __global__
-void shared_clac_hist_kernel(const uchar* __restrict__ arr, 
-                             const u32 arr_size, 
-                             uchar* hist, 
-                             const u32 hist_bins)
+void shared_hist_kernel(const uchar* __restrict__ arr, 
+                        const u32 arr_size, 
+                        uchar* hist, 
+                        const u32 hist_bins)
 {
     extern __shared__ uchar shared_hist[];
     u32 id_x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -91,7 +91,7 @@ void shared_clac_hist_kernel(const uchar* __restrict__ arr,
     }
 }
 
-void gpuGlobalClacHist(uchar* h_arr, const u32 arr_size, uchar* h_hist, const u32 hist_bins)
+void gpuGlobalHist(uchar* h_arr, const u32 arr_size, uchar* h_hist, const u32 hist_bins)
 {
     uchar* d_arr;
     cudaMalloc((void**)&d_arr, arr_size * sizeof(uchar));
@@ -103,9 +103,9 @@ void gpuGlobalClacHist(uchar* h_arr, const u32 arr_size, uchar* h_hist, const u3
     dim3 blocks = BLOCK_SIZE;
     dim3 grids = (arr_size + BLOCK_SIZE - 1) / BLOCK_SIZE;
 
-    global_clac_hist_kernel <<< grids, blocks >>> (d_arr, arr_size, d_hist, hist_bins);
+    global_hist_kernel <<< grids, blocks >>> (d_arr, arr_size, d_hist, hist_bins);
     if (cudaSuccess != cudaGetLastError()) {
-        printf("global_clac_hist_kernel fault!\n");
+        printf("global_hist_kernel fault!\n");
     }
 
     cudaMemcpy(h_hist, d_hist, hist_bins * sizeof(uchar), cudaMemcpyDeviceToHost);
@@ -113,7 +113,7 @@ void gpuGlobalClacHist(uchar* h_arr, const u32 arr_size, uchar* h_hist, const u3
     cudaFree(d_hist);
 }
 
-void gpuSharedClacHist(uchar* h_arr, const u32 arr_size, uchar* h_hist, const u32 hist_bins)
+void gpuSharedHist(uchar* h_arr, const u32 arr_size, uchar* h_hist, const u32 hist_bins)
 {
     uchar* d_arr;
     cudaMalloc((void**)&d_arr, arr_size * sizeof(uchar));
@@ -127,7 +127,7 @@ void gpuSharedClacHist(uchar* h_arr, const u32 arr_size, uchar* h_hist, const u3
 
     u32 shared_mem_size = hist_bins * sizeof(uchar);
 
-    shared_clac_hist_kernel <<< grids, blocks, shared_mem_size >>> (d_arr, arr_size, d_hist, hist_bins);
+    shared_hist_kernel <<< grids, blocks, shared_mem_size >>> (d_arr, arr_size, d_hist, hist_bins);
     if (cudaSuccess != cudaGetLastError()) {
         printf("shared_clac_hist_kernel fault!\n");
     }
@@ -137,7 +137,7 @@ void gpuSharedClacHist(uchar* h_arr, const u32 arr_size, uchar* h_hist, const u3
     cudaFree(d_hist);
 }
 
-void cpuClacHist(uchar* arr, const u32 arr_size, uchar* hist, const u32 hist_bins)
+void cpuHist(uchar* arr, const u32 arr_size, uchar* hist, const u32 hist_bins)
 {
     for (u32 i = 0; i < arr_size; i++) {
         if (arr[i] < hist_bins) {
@@ -155,18 +155,18 @@ int main()
     CREATE_RAND_ARR(arr, arr_size, 0, 8);
 
     uchar* cpu_hist = (uchar*)malloc(hist_bins * sizeof(uchar));
-    cpuClacHist(arr, arr_size, cpu_hist, hist_bins);
-    printf("CPU clac hist:\n");
+    cpuHist(arr, arr_size, cpu_hist, hist_bins);
+    printf("CPU hist:\n");
     PRINT_ARR(cpu_hist, hist_bins);
 
     uchar* gpu_global_hist = (uchar*)malloc(hist_bins * sizeof(uchar));
-    gpuGlobalClacHist(arr, arr_size, gpu_global_hist, hist_bins);
-    printf("GPU clac hist - use global memory:\n");
+    gpuGlobalHist(arr, arr_size, gpu_global_hist, hist_bins);
+    printf("GPU hist - use global memory:\n");
     PRINT_ARR(gpu_global_hist, hist_bins);
 
     uchar* gpu_shared_hist = (uchar*)malloc(hist_bins * sizeof(uchar));
-    gpuSharedClacHist(arr, arr_size, gpu_shared_hist, hist_bins);
-    printf("GPU clac hist - use shared memory:\n");
+    gpuSharedHist(arr, arr_size, gpu_shared_hist, hist_bins);
+    printf("GPU hist - use shared memory:\n");
     PRINT_ARR(gpu_shared_hist, hist_bins);
 
     free(arr);

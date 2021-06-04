@@ -6,19 +6,19 @@ my cuda programing practice
 
 ### find max element
 - [x] cpu
-- [x] global memory
 - [x] shared memory
+- [ ] warp level
 
-### reduction
+### reduce
 - [x] cpu
 - [x] global memory
-- [ ] shared memory
-- [ ] warp level
+- [x] shared memory
+- [x] warp level
 
 ### histogram
 - [x] cpu
 - [x] global memory
-- [ ] shared memory
+- [x] shared memory
 - [ ] warp level
 
 ### sort
