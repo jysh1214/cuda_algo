@@ -7,7 +7,6 @@ my cuda programing practice
 ### find max element
 - [x] cpu
 - [x] shared memory
-- [ ] warp level
 
 ### reduce
 - [x] cpu
@@ -19,7 +18,6 @@ my cuda programing practice
 - [x] cpu
 - [x] global memory
 - [x] shared memory
-- [ ] warp level
 
 ### sort
 
