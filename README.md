@@ -8,7 +8,7 @@ my cuda programing practice
 - [x] cpu
 - [x] shared memory
 
-### reduce
+### reduce sum
 - [x] cpu
 - [x] global memory
 - [x] shared memory
@@ -24,3 +24,4 @@ my cuda programing practice
 ### bfs
 
 ### kmeans
+
