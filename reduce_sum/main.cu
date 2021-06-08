@@ -289,12 +289,12 @@ u32 gpuGlobalReduceSum(const u32* const h_arr, const u32 size)
 
 u32 cpuSum(const u32* const arr, const u32 size)
 {
-    u32 maxval = 0;
+    u32 val = 0;
     for (u32 i = 0; i < size; i++) {
-        maxval += arr[i];
+        val += arr[i];
     }
 
-    return maxval;
+    return val;
 }
 
 u32 cpuReduceSum(const u32* const arr, const u32 size)

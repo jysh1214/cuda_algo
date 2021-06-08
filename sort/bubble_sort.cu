@@ -83,7 +83,7 @@ int compare(const void* a, const void* b)
 }
 
 __global__
-void global_bubble_sort_kernel(const u32* __restrict__ arr, const u32 size, u32* sorted_arr)
+void global_bubble_sort_kernel(const u32* __restrict__ arr, const u32 size, u32* __restrict__ sorted_arr)
 {
     u32 id_x = blockIdx.x * blockDim.x + threadIdx.x;
     if (id_x >= size) {
