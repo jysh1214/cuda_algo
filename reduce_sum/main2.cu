@@ -69,6 +69,9 @@ u32 cpuSum(const u32* const arr, const u32 size)
     return val;
 }
 
+/**
+ * @ref https://developer.nvidia.com/blog/faster-parallel-reductions-kepler/
+ */
 int main()
 {
     const u32 size = 2000;
